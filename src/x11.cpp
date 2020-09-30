@@ -6,8 +6,7 @@
 #include "x11.h"
 #include <iostream>
 #include <cstring>
-#include <X11/Xutil.h>
-#include <X11/extensions/xf86vmode.h>
+#include <xcb/randr.h>
 #include "utils.h"
 #include "defs.h"
 #include <algorithm>
@@ -15,79 +14,93 @@
 
 X11::X11()
 {
-	if(!XInitThreads())
-	{
-		LOGE << "Failed to initialize XThreads. App may crash unexpectedly.";
-	}
 
-	LOGD << "Initializing XDisplay...";
+  LOGD << "Initializing display...";
+  dsp = xcb_connect(NULL, &scr_num);
 
-	dsp     = XOpenDisplay(nullptr);
-	root    = DefaultRootWindow(dsp);
+  scr = screenOfDisplay(scr_num);
+  if (scr) {
+    root = scr->root;
+  } else {
+    LOGE << "Could not determine screen";
+    exit(EXIT_FAILURE);
+  }
 
-	scr     = DefaultScreenOfDisplay(dsp);
-	scr_num = XDefaultScreen(dsp);
+	LOGD << "display initialized on screen " << scr_num;
 
-	LOGD << "XDisplay initialized on screen " << scr_num;
+	w = uint32_t(scr->width_in_pixels);
+	h = uint32_t(scr->height_in_pixels);
 
-	w = uint32_t(scr->width);
-	h = uint32_t(scr->height);
+  xcb_randr_get_screen_resources_cookie_t scrResCookie =
+    xcb_randr_get_screen_resources(dsp, root);
+  xcb_randr_get_screen_resources_reply_t *scrResReply =
+    xcb_randr_get_screen_resources_reply(dsp , scrResCookie, 0);
 
-	// Query XF86Vidmode extension
-	{
-		int ev_base, err_base;
+  if (!scrResReply) {
+    LOGE << "Failed to get screen information";
+    exit(EXIT_FAILURE);
+  }
 
-		if (!XF86VidModeQueryExtension(dsp, &ev_base, &err_base))
-		{
-			LOGW << "Failed to query XF86VidMode extension";
+  xcb_randr_crtc_t *firstCrtc =
+    xcb_randr_get_screen_resources_crtcs(scrResReply);
+  crtc_num = *firstCrtc;
+
+  // Get initial gamma ramp and size
+  xcb_randr_get_crtc_gamma_reply_t* gammaReply =
+    xcb_randr_get_crtc_gamma_reply(dsp, xcb_randr_get_crtc_gamma(dsp, crtc_num), NULL);
+  if (!gammaReply) {
+    LOGE << "Failed to get gamma information";
+    exit(EXIT_FAILURE);
+  }
+  // get ramp size
+  ramp_sz = gammaReply->size;
+  {
+    if (ramp_sz == 0) {
+      LOGE << "Invalid gamma ramp size";
+      free(gammaReply);
+      exit(EXIT_FAILURE);
 		}
-
-		int major_ver, minor_ver;
-
-		if (!XF86VidModeQueryVersion(dsp, &major_ver, &minor_ver))
-		{
-			LOGW << "Failed to query XF86VidMode version";
-		}
-
-		LOGD << "XF86VidMode ver: " << major_ver << '.' << minor_ver;
-	}
-
-	// Get initial gamma ramp and size
-	{
-		if (!XF86VidModeGetGammaRampSize(dsp, scr_num, &ramp_sz))
-		{
-			LOGF << "Failed to get XF86 gamma ramp size";
-			exit(EXIT_FAILURE);
-		}
-
-		if(ramp_sz == 0)
-		{
-			LOGF << "Invalid gamma ramp size";
-			exit(EXIT_FAILURE);
-		}
+    else
+      {
+        LOGI << "gamma size = " << ramp_sz;
+      }
 
 		init_ramp.resize(3 * size_t(ramp_sz) * sizeof(uint16_t));
 
-		uint16_t *d = init_ramp.data(),
-			 *r = &d[0 * ramp_sz],
-			 *g = &d[1 * ramp_sz],
-			 *b = &d[2 * ramp_sz];
+		uint16_t *d = init_ramp.data(), *r, *g, *b;
 
-		if (!XF86VidModeGetGammaRamp(dsp, scr_num, ramp_sz, r, g, b))
-		{
-			LOGE << "Failed to get initial gamma ramp";
-			initial_ramp_exists = false;
-		}
+    r = xcb_randr_get_crtc_gamma_red(gammaReply);
+    g = xcb_randr_get_crtc_gamma_green(gammaReply);
+    b = xcb_randr_get_crtc_gamma_blue(gammaReply);
+    free(gammaReply);
+    if (!r or !g or !b) {
+      LOGE << "Failed to get initial gamma ramp";
+      initial_ramp_exists = false;
+    } else {
+      d[0*ramp_sz] = *r;
+      d[1*ramp_sz] = *g;
+      d[2*ramp_sz] = *b;
+    }
 	}
 }
 
 void X11::getX11Snapshot(std::vector<uint8_t> &buf) noexcept
 {
-	const auto img = XGetImage(dsp, root, 0, 0, w, h, AllPlanes, ZPixmap);
-
-	memcpy(buf.data(), reinterpret_cast<uint8_t*>(img->data), buf.size());
-
-	img->f.destroy_image(img);
+	// const auto img = XGetImage(dsp, root, 0, 0, w, h, AllPlanes, ZPixmap);
+  const auto reply =
+    xcb_get_image_reply(dsp,
+                        xcb_get_image(dsp,
+                                      XCB_IMAGE_FORMAT_Z_PIXMAP,
+                                      root,
+                                      0,
+                                      0,
+                                      w,
+                                      h,
+                                      static_cast<uint32_t>(~0)
+                                      ),
+                        NULL);
+	memcpy(buf.data(), xcb_get_image_data(reply), buf.size());
+	free(reply);
 }
 
 void X11::fillRamp(std::vector<uint16_t> &ramp, const int brightness, const int temp_step)
@@ -116,13 +129,18 @@ void X11::fillRamp(std::vector<uint16_t> &ramp, const int brightness, const int 
 	}
 }
 
-void X11::setXF86Gamma(int scr_br, int temp)
+void X11::setGamma(int scr_br, int temp)
 {
 	std::vector<uint16_t> r (3 * ramp_sz * sizeof(uint16_t));
 
 	fillRamp(r, scr_br, temp);
 
-	XF86VidModeSetGammaRamp(dsp, 0, ramp_sz, &r[0*ramp_sz], &r[1*ramp_sz], &r[2*ramp_sz]);
+  xcb_randr_set_crtc_gamma(dsp, crtc_num, ramp_sz, &r[0*ramp_sz], &r[1*ramp_sz], &r[2*ramp_sz]);
+}
+
+void X11::setGamma(int temp) {
+  // set at maximum brightness
+  setGamma(brt_slider_steps, temp);
 }
 
 void X11::setInitialGamma(bool set_previous)
@@ -130,12 +148,13 @@ void X11::setInitialGamma(bool set_previous)
 	if(set_previous && initial_ramp_exists)
 	{
 		LOGI << "Setting previous gamma";
-		XF86VidModeSetGammaRamp(dsp, scr_num, ramp_sz, &init_ramp[0*ramp_sz], &init_ramp[1*ramp_sz], &init_ramp[2*ramp_sz]);
+    xcb_randr_set_crtc_gamma(dsp, crtc_num, ramp_sz, &init_ramp[0 * ramp_sz],
+                             &init_ramp[1 * ramp_sz], &init_ramp[2 * ramp_sz]);
 	}
 	else
 	{
 		LOGI << "Setting pure gamma";
-		X11::setXF86Gamma(brt_slider_steps, 0);
+		X11::setGamma(brt_slider_steps, 0);
 	}
 }
 
@@ -149,7 +168,23 @@ uint32_t X11::getHeight()
 	return h;
 }
 
+xcb_screen_t* X11::screenOfDisplay(int screen) {
+  if (!dsp) {
+    return NULL;
+  }
+
+  xcb_screen_iterator_t iter;
+  iter = xcb_setup_roots_iterator(xcb_get_setup(dsp));
+  for (;iter.rem; --screen, xcb_screen_next(&iter))
+    if (screen == 0) {
+      return iter.data;
+    }
+  return NULL;
+}
+
 X11::~X11()
 {
-	if(dsp) XCloseDisplay(dsp);
+  if (dsp) {
+    xcb_disconnect(dsp);
+  }
 }

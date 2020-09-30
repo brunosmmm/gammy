@@ -263,7 +263,7 @@ void MainWindow::on_tempSlider_valueChanged(int val)
 		setGDIGamma(brt_step, val);
 	}
 #ifndef _WIN32
-	else x11->setXF86Gamma(brt_step, val);
+	else x11->setGamma(brt_step, val);
 #endif
 
 	double temp_kelvin = remap(temp_slider_steps - val, 0, temp_slider_steps, min_temp_kelvin, max_temp_kelvin);
@@ -342,7 +342,7 @@ void MainWindow::on_manBrSlider_valueChanged(int value)
 		setGDIGamma(brt_step, cfg["temp_step"]);
 	}
 #ifndef _WIN32
-	else x11->setXF86Gamma(brt_step, cfg["temp_step"]);
+	else x11->setGamma(brt_step, cfg["temp_step"]);
 #endif
 
 	updateBrLabel();

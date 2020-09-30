@@ -43,7 +43,7 @@ win32:{
 unix:{
     HEADERS += src/x11.h
     SOURCES += src/x11.cpp
-    LIBS += -lX11 -lXxf86vm
+    LIBS += -lxcb -lxcb-randr
 
     isEmpty(PREFIX) {
         PREFIX = /usr/opt

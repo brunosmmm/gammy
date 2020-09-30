@@ -306,7 +306,7 @@ void recordScreen(Args &args, convar &ss_cv, MainWindow &w)
 	const uint64_t screen_res = args.x11->getWidth() * args.x11->getHeight();
 	const uint64_t len = screen_res * 4;
 
-	args.x11->setXF86Gamma(brt_step, cfg["temp_step"]);
+	args.x11->setGamma(brt_step, cfg["temp_step"]);
 #endif
 
 	LOGD << "Buffer size: " << len;
@@ -457,7 +457,7 @@ void init()
 	}
 
 	plog::get()->addAppender(&file_appender);
-	plog::get()->setMaxSeverity(plog::Severity(cfg["log_lvl"]));
+	// plog::get()->setMaxSeverity(plog::Severity(cfg["log_lvl"]));
 
 #ifndef _WIN32
 	signal(SIGINT, sig_handler);
