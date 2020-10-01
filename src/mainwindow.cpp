@@ -265,7 +265,6 @@ void MainWindow::on_tempSlider_valueChanged(int val)
 #ifndef _WIN32
         else {
           if (cfg["use_backlight"]) {
-            x11->setBacklight(brt_step);
             x11->setGamma(val);
           } else {
             x11->setGamma(brt_step, val);
