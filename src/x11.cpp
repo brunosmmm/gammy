@@ -34,7 +34,7 @@ X11::X11()
   xcb_randr_get_screen_resources_cookie_t scrResCookie =
     xcb_randr_get_screen_resources(dsp, root);
   xcb_randr_get_screen_resources_reply_t *scrResReply =
-    xcb_randr_get_screen_resources_reply(dsp , scrResCookie, 0);
+    xcb_randr_get_screen_resources_reply(dsp , scrResCookie, NULL);
 
   if (!scrResReply) {
     LOGE << "Failed to get screen information";
@@ -43,7 +43,12 @@ X11::X11()
 
   xcb_randr_crtc_t *firstCrtc =
     xcb_randr_get_screen_resources_crtcs(scrResReply);
+  xcb_randr_output_t *firstOutput =
+    xcb_randr_get_screen_resources_outputs(scrResReply);
+
   crtc_num = *firstCrtc;
+  output_num = *firstOutput;
+  free(scrResReply);
 
   // Get initial gamma ramp and size
   xcb_randr_get_crtc_gamma_reply_t* gammaReply =
@@ -78,6 +83,26 @@ X11::X11()
       d[2*ramp_sz] = *b;
     }
 	}
+
+  // get backlight information
+  xcb_intern_atom_cookie_t backlightCookie;
+  xcb_intern_atom_reply_t* backlightReply;
+
+  backlightCookie = xcb_intern_atom(dsp, 1, strlen("Backlight"), "Backlight");
+  // backlightCookie[1] = xcb_intern_atom(dsp, 1, strlen("BACKLIGHT"), "BACKLIGHT");
+
+  backlightReply = xcb_intern_atom_reply(dsp, backlightCookie, NULL);
+  if (!backlightReply)
+    {
+      LOGI << "No backlight information available";
+      initial_backlight_exists = false;
+    }
+  else {
+    backlight = backlightReply->atom;
+    free(backlightReply);
+    init_backlight = getBacklight();
+    LOGD << "Initial backlight value = " << init_backlight;
+  }
 }
 
 void X11::getX11Snapshot(std::vector<uint8_t> &buf) noexcept
@@ -152,6 +177,50 @@ void X11::setInitialGamma(bool set_previous)
 		LOGI << "Setting pure gamma";
 		X11::setGamma(brt_slider_steps, 0);
 	}
+}
+
+void X11::setInitialBacklight(bool set_previous)
+{
+  if (set_previous and initial_backlight_exists)
+    {
+      setBacklight(init_backlight);
+    }
+  else
+    {
+      setBacklight(brt_slider_steps);
+    }
+}
+
+void X11::setBacklight(uint32_t level)
+{
+  if (!dsp or !backlight) {
+    return;
+  }
+
+  uint32_t _level = (uint32_t)((double)(level*255)/(double)brt_slider_steps);
+  xcb_randr_change_output_property(dsp, output_num, backlight, XCB_ATOM_INTEGER, 32,
+                                   XCB_PROP_MODE_REPLACE, 1, (uint8_t*)&_level);
+}
+
+uint32_t X11::getBacklight(void)
+{
+  uint32_t retval = 0;
+  if (backlight != XCB_ATOM_NONE and dsp) {
+    xcb_randr_get_output_property_cookie_t cookie;
+    xcb_randr_get_output_property_reply_t* reply;
+
+    cookie = xcb_randr_get_output_property(dsp, output_num, backlight, XCB_ATOM_NONE, 0, 4, 0, 0);
+    reply = xcb_randr_get_output_property_reply(dsp, cookie, NULL);
+    if (!reply)
+      {
+        LOGE << "Cannot get backlight information";
+        return -1;
+      }
+    retval = (uint32_t)(*((int32_t*)xcb_randr_get_output_property_data(reply)));
+    free(reply);
+  }
+
+  return retval;
 }
 
 uint32_t X11::getWidth()

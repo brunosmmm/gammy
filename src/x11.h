@@ -17,9 +17,15 @@ class X11
   xcb_screen_t *scr;
   xcb_window_t root;
 
+  // optional backlight
+  xcb_atom_t backlight;
+  uint32_t init_backlight;
+  bool initial_backlight_exists = true;
+
 	int ramp_sz;
 	int scr_num;
   int crtc_num;
+  int output_num;
 
 	std::vector<uint16_t> init_ramp;
 	bool initial_ramp_exists = true;
@@ -28,6 +34,7 @@ class X11
 
 	void fillRamp(std::vector<uint16_t> &ramp, const int brightness, const int temp);
   xcb_screen_t *screenOfDisplay(int screen);
+  uint32_t getBacklight(void);
 
 	public:
 	X11();
@@ -38,9 +45,11 @@ class X11
 	void getX11Snapshot(std::vector<uint8_t> &buf) noexcept;
 	void setGamma(int scrBr, int temp);
   void setGamma(int temp);
-	void setInitialGamma(bool set_previous);
+  void setBacklight(uint32_t level);
+  void setInitialBacklight(bool set_previous);
+  void setInitialGamma(bool set_previous);
 
-	~X11();
+  ~X11();
 };
 
 #endif // X11_H

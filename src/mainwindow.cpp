@@ -261,9 +261,16 @@ void MainWindow::on_tempSlider_valueChanged(int val)
 
 	if constexpr(os == OS::Windows) {
 		setGDIGamma(brt_step, val);
-	}
+        }
 #ifndef _WIN32
-	else x11->setGamma(brt_step, val);
+        else {
+          if (cfg["use_backlight"]) {
+            x11->setBacklight(brt_step);
+            x11->setGamma(val);
+          } else {
+            x11->setGamma(brt_step, val);
+          }
+        }
 #endif
 
 	double temp_kelvin = remap(temp_slider_steps - val, 0, temp_slider_steps, min_temp_kelvin, max_temp_kelvin);
@@ -340,9 +347,16 @@ void MainWindow::on_manBrSlider_valueChanged(int value)
 
 	if constexpr(os == OS::Windows) {
 		setGDIGamma(brt_step, cfg["temp_step"]);
-	}
+        }
 #ifndef _WIN32
-	else x11->setGamma(brt_step, cfg["temp_step"]);
+        else {
+          if (cfg["use_backlight"]) {
+            x11->setBacklight(brt_step);
+            x11->setGamma(cfg["temp_step"]);
+          } else {
+            x11->setGamma(brt_step, cfg["temp_step"]);
+          }
+        }
 #endif
 
 	updateBrLabel();

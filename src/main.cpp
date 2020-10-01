@@ -306,7 +306,12 @@ void recordScreen(Args &args, convar &ss_cv, MainWindow &w)
 	const uint64_t screen_res = args.x11->getWidth() * args.x11->getHeight();
 	const uint64_t len = screen_res * 4;
 
-	args.x11->setGamma(brt_step, cfg["temp_step"]);
+  if (cfg["use_backlight"]) {
+    args.x11->setBacklight(brt_step);
+    args.x11->setGamma(cfg["temp_step"]);
+  } else {
+    args.x11->setGamma(brt_step, cfg["temp_step"]);
+  }
 #endif
 
 	LOGD << "Buffer size: " << len;
@@ -520,9 +525,12 @@ int main(int argc, char **argv)
 
 	if constexpr (os == OS::Windows) {
 		setGDIGamma(brt_slider_steps, 0);
-	}
+        }
 #ifndef _WIN32
-	else x11.setInitialGamma(wnd.set_previous_gamma);
+        else {
+          x11.setInitialGamma(wnd.set_previous_gamma);
+          x11.setInitialBacklight(wnd.set_previous_gamma);
+        }
 #endif
 
 	LOGV << "Exiting";
