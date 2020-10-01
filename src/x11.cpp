@@ -101,7 +101,7 @@ X11::X11()
     backlight = backlightReply->atom;
     free(backlightReply);
     init_backlight = getBacklight();
-    LOGD << "Initial backlight value = " << init_backlight;
+    LOGD << "Initial backlight value is " << init_backlight;
   }
 }
 
@@ -183,10 +183,12 @@ void X11::setInitialBacklight(bool set_previous)
 {
   if (set_previous and initial_backlight_exists)
     {
+      LOGI << "Setting previous backlight level (" << init_backlight << ")";
       setBacklight(init_backlight);
     }
   else
     {
+      LOGI << "Setting maximum backlight level";
       setBacklight(brt_slider_steps);
     }
 }
@@ -197,7 +199,8 @@ void X11::setBacklight(uint32_t level)
     return;
   }
 
-  uint32_t _level = (uint32_t)((double)(level*255)/(double)brt_slider_steps);
+  uint32_t _level =
+      (uint32_t)((double)(level * 255) / (double)brt_slider_steps);
   xcb_randr_change_output_property(dsp, output_num, backlight, XCB_ATOM_INTEGER, 32,
                                    XCB_PROP_MODE_REPLACE, 1, (uint8_t*)&_level);
 }
