@@ -60,10 +60,6 @@ X11::X11()
       free(gammaReply);
       exit(EXIT_FAILURE);
 		}
-    else
-      {
-        LOGI << "gamma size = " << ramp_sz;
-      }
 
 		init_ramp.resize(3 * size_t(ramp_sz) * sizeof(uint16_t));
 
