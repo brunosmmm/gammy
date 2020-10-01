@@ -34,7 +34,6 @@ class X11
 
 	void fillRamp(std::vector<uint16_t> &ramp, const int brightness, const int temp);
   xcb_screen_t *screenOfDisplay(int screen);
-  uint32_t getBacklight(void);
 
 	public:
 	X11();
@@ -48,6 +47,7 @@ class X11
   void setBacklight(uint32_t level);
   void setInitialBacklight(bool set_previous);
   void setInitialGamma(bool set_previous);
+  uint32_t getBacklight(void);
 
   ~X11();
 };
