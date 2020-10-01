@@ -457,7 +457,7 @@ void init()
 	}
 
 	plog::get()->addAppender(&file_appender);
-	// plog::get()->setMaxSeverity(plog::Severity(cfg["log_lvl"]));
+	plog::get()->setMaxSeverity(plog::Severity(cfg["log_lvl"]));
 
 #ifndef _WIN32
 	signal(SIGINT, sig_handler);
