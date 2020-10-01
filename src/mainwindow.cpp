@@ -115,8 +115,12 @@ void MainWindow::init()
 		ui->extendBr->setChecked(cfg["extend_br"]);
 		toggleBrtSlidersRange(cfg["extend_br"]);
 
-		ui->manBrSlider->setValue(cfg["brightness"]);
-		ui->offsetSlider->setValue(cfg["offset"]);
+    if (cfg["use_backlight"]) {
+      ui->manBrSlider->setValue(x11->getBacklight());
+    } else {
+      ui->manBrSlider->setValue(cfg["brightness"]);
+    }
+    ui->offsetSlider->setValue(cfg["offset"]);
 
 		ui->tempSlider->setRange(0, temp_slider_steps);
 		ui->tempSlider->setValue(cfg["temp_step"]);
