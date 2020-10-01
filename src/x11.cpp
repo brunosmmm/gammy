@@ -217,6 +217,7 @@ uint32_t X11::getBacklight(void)
         return -1;
       }
     retval = (uint32_t)(*((int32_t*)xcb_randr_get_output_property_data(reply)));
+    retval = (uint32_t)((double)retval*(double)brt_slider_steps/255.0);
     free(reply);
   }
 
